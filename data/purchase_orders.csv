@@ -1,0 +1,16 @@
+po_number,vendor_id,po_date,status,line_no,item_code,description,qty,unit,unit_price,tax_rate,currency
+PO-2026-0088,V001,2026-06-10,closed,1,SAF-GLV-100,Nitrile gloves (box of 100),100,box,380.00,0.18,INR
+PO-2026-0090,V007,2026-06-25,open,1,SRV-HK-MON,Housekeeping services - monthly,3,month,62000.00,0.18,INR
+PO-2026-0101,V001,2026-08-28,open,1,SAF-HLM-01,Safety helmet (ISI marked),50,pc,450.00,0.18,INR
+PO-2026-0101,V001,2026-08-28,open,2,SAF-VST-02,High-visibility safety vest,20,pc,280.00,0.18,INR
+PO-2026-0101,V001,2026-08-28,open,3,SAF-FAK-03,First aid kit (industrial),10,pc,1200.00,0.18,INR
+PO-2026-0102,V002,2026-08-05,open,1,PKG-BOX-L,Corrugated shipping box (large),1000,pc,42.00,0.18,INR
+PO-2026-0102,V002,2026-08-05,open,2,PKG-BWR-50,Bubble wrap roll 50m,40,roll,650.00,0.18,INR
+PO-2026-0103,V003,2026-08-01,open,1,LOG-FTL-PC,Full truckload freight Pune to Chennai,3,trip,38500.00,0.12,INR
+PO-2026-0104,V004,2026-09-02,open,1,OFF-PPR-A4,A4 copier paper 75gsm (ream),200,ream,245.00,0.18,INR
+PO-2026-0104,V004,2026-09-02,open,2,OFF-TNR-26A,Toner cartridge HP 26A,12,pc,3850.00,0.18,INR
+PO-2026-0104,V004,2026-09-02,open,3,OFF-MKR-10,Whiteboard markers (box of 10),30,box,320.00,0.18,INR
+PO-2026-0105,V005,2026-08-18,open,1,ELE-LED-40,LED panel light 2x2 40W,80,pc,1450.00,0.18,INR
+PO-2026-0105,V005,2026-08-18,open,2,ELE-CBL-25,Copper cable 2.5 sqmm (90m coil),25,coil,2350.00,0.18,INR
+PO-2026-0106,V006,2026-07-22,open,1,IT-MON-24,24-inch LED monitor,10,pc,11200.00,0.18,INR
+PO-2026-0107,V004,2026-09-10,open,1,OFF-CHR-ERG,Ergonomic office chair,15,pc,8900.00,0.18,INR

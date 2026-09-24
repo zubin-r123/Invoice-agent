@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./test_invoices/*.pdf)",
+      "Read(./.venv/**)",
+      "Read(./runs.db)",
+      "Read(./.env)"
+    ]
+  }
+}

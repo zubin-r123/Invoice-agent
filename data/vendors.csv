@@ -1,0 +1,8 @@
+vendor_id,legal_name,aliases,gstin,state,status,payment_terms_days,bank_account_last4,onboarded_on
+V001,Acme Industrial Supplies Pvt Ltd,Acme Industrial|Acme Supplies|ACME Industrial Supplies,27AABCA1234F1Z5,Maharashtra,approved,30,4471,2024-03-11
+V002,Brightline Packaging Solutions Pvt Ltd,Brightline Packaging|Brightline,29AAFCB5678K1Z2,Karnataka,approved,45,9082,2023-11-02
+V003,Northwind Logistics LLP,Northwind Logistics|Northwind,27AAGFN4321M1ZQ,Maharashtra,approved,15,3316,2024-06-19
+V004,Sahyadri Office Solutions,Sahyadri Office|Sahyadri Stationers,27ABCPS9876R1ZX,Maharashtra,approved,30,7754,2025-01-08
+V005,Metro Electricals & Co,Metro Electricals|Metro Electrical Co,07AAHFM2468J1Z9,Delhi,approved,30,2209,2024-09-27
+V006,Quantum Tech Traders Pvt Ltd,Quantum Tech|Quantum Traders,33AAJCQ1357L1Z4,Tamil Nadu,blocked,30,6640,2025-04-15
+V007,Everfresh Facility Services Pvt Ltd,Everfresh Facility|Everfresh Services,27AAKCE8642N1Z6,Maharashtra,approved,30,1185,2023-08-30
