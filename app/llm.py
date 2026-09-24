@@ -3,7 +3,7 @@ import json
 import os
 
 from app.config import GROQ_TEXT_MODEL, GROQ_VISION_MODEL
-from app.models import InvoiceData
+from app.models import InvoiceData, RuleResult
 
 _client = None
 
@@ -119,3 +119,58 @@ def extract_from_images(images: list[bytes]) -> InvoiceData:
     data = _parse_json(response.choices[0].message.content)
     data["source"] = "vision"
     return InvoiceData(**data)
+
+
+_EXPLAIN_SYSTEM_PROMPT = """You are writing a short plain-English note for an accounts-payable
+manager who is not technical. A deterministic rules engine has ALREADY made the final decision —
+you are not deciding anything and must not suggest a different outcome.
+
+Output ONLY a single JSON object with exactly two keys:
+"summary" (1-2 sentences plainly explaining why this outcome was reached) and "next_action" (one
+short sentence telling the reviewer or approver what to do next). No prose, no markdown fences,
+no other keys.
+
+Rules for the writing itself:
+- NEVER write a bare rule code such as "DUP-02", "PO-05", or "V-03" in the summary or next_action.
+  Those are shown to the reader separately as tags — your job is to say in plain words what they
+  mean, using the specific facts and numbers from the rule messages and evidence below (amounts,
+  dates, quantities, vendor and invoice names/numbers).
+- If a duplicate-file rule fired (the one about the exact same PDF being submitted before): this
+  is an internal duplicate upload (e.g. someone clicked submit twice), NOT a new invoice from the
+  vendor. Say so, and do not recommend contacting the vendor for this reason.
+  If a duplicate-invoice-number rule fired instead (same vendor, matching invoice number, but not
+  necessarily the same file): treat this as the vendor resubmitting or double-billing, and
+  recommend notifying the vendor, citing the earlier invoice's number and date.
+- Be concrete: name the vendor, the invoice number, and the actual amounts/dates/quantities
+  involved rather than speaking generically."""
+
+
+def explain(
+    invoice: InvoiceData,
+    rule_results: list[RuleResult],
+    outcome: str,
+    reasons: list[str],
+) -> tuple[str, str]:
+    client = get_client()
+    lines = [
+        f"{r.rule_id} [{r.status}]: {r.message} | evidence: {r.evidence}" for r in rule_results
+    ]
+    user_prompt = (
+        f"Vendor: {invoice.vendor_name or 'unknown'}\n"
+        f"Invoice number: {invoice.invoice_number or 'unknown'}\n"
+        f"Outcome (already decided, final): {outcome}\n"
+        f"Driving rule_ids (internal tags, do not print these codes in your prose): "
+        f"{', '.join(reasons) if reasons else 'none'}\n\n"
+        "All rule results, with evidence for you to cite real numbers from:\n" + "\n".join(lines)
+    )
+    response = client.chat.completions.create(
+        model=GROQ_TEXT_MODEL,
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": _EXPLAIN_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    data = _parse_json(response.choices[0].message.content)
+    return str(data["summary"]), str(data["next_action"])

@@ -1,12 +1,290 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoice Agent</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClearPay</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%B3</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+  <script defer src="/static/app.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body>
-  <h1>Invoice Agent</h1>
-  <p>Coming soon.</p>
+<body class="min-h-screen bg-page text-slate-700 font-sans" style="font-family: 'Inter', sans-serif;">
+  <div x-data="runView()" x-init="init()">
+  <nav class="bg-brand text-white">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <span class="text-lg font-semibold tracking-tight">ClearPay</span>
+        <div class="flex items-center gap-1">
+          <a href="/" class="text-sm font-medium px-3 py-1.5 rounded-md bg-white/15">Process</a>
+          <a href="/dashboard" class="text-sm font-medium px-3 py-1.5 rounded-md text-white/80 hover:text-white hover:bg-white/10">Dashboard</a>
+        </div>
+      </div>
+      <button
+        type="button"
+        @click="resetDemo()"
+        class="text-xs font-medium text-white/80 hover:text-white border border-white/25 hover:border-white/40 rounded-md px-3 py-1.5"
+      >
+        Reset demo
+      </button>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto px-4 py-8">
+
+    <div x-show="error" x-cloak class="mb-6 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 p-4 text-sm" x-text="error"></div>
+
+    <!-- Upload card (also the empty state) -->
+    <div x-show="!runId" x-cloak class="bg-white rounded-xl shadow-sm p-6 mb-6">
+      <h1 class="text-lg font-semibold text-slate-900 mb-1">Process an invoice</h1>
+      <p class="text-sm text-slate-500 mb-4">Drop a PDF, or try one of the sample scenarios below.</p>
+      <div
+        class="border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer"
+        :class="dragOver ? 'border-brand bg-brand-50' : 'border-slate-200 hover:border-slate-300'"
+        @dragover.prevent="dragOver = true"
+        @dragleave.prevent="dragOver = false"
+        @drop.prevent="handleDrop($event)"
+        @click="$refs.fileInput.click()"
+      >
+        <p class="text-sm text-slate-600" x-show="!uploading">Drag and drop a PDF here, or click to choose a file</p>
+        <p class="text-sm text-slate-600" x-show="uploading" x-cloak>Uploading…</p>
+        <input type="file" accept="application/pdf" x-ref="fileInput" class="hidden" @change="handleFileInput($event)" />
+      </div>
+
+      <div class="mt-5">
+        <p class="text-xs font-medium text-slate-500 mb-2">Sample invoices</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <template x-for="sample in sampleMeta" :key="sample.file">
+            <button
+              type="button"
+              class="text-left border border-slate-200 hover:border-brand hover:shadow-sm bg-white rounded-lg px-3 py-2.5 transition-colors"
+              @click="loadSample(sample.file)"
+            >
+              <div class="text-sm font-medium text-slate-800" x-text="sample.label"></div>
+              <span class="inline-block mt-1 text-[11px] bg-slate-100 text-slate-500 rounded px-1.5 py-0.5" x-text="sample.tag"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline stepper -->
+    <div x-show="runId" x-cloak class="bg-white rounded-xl shadow-sm p-5 mb-6">
+      <h2 class="text-sm font-semibold text-slate-900 mb-4">Pipeline</h2>
+      <ol class="stepper">
+        <template x-for="stage in stageOrder" :key="stage">
+          <li class="stepper-item" :class="'is-' + stages[stage].status">
+            <span class="stepper-dot" :class="stepDotClass(stages[stage].status)">
+              <span x-show="stages[stage].status === 'running'" class="stepper-ping animate-ping"></span>
+              <template x-if="stages[stage].status === 'running'">
+                <svg class="relative h-3.5 w-3.5 text-white animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+              </template>
+              <template x-if="stages[stage].status === 'done'">
+                <svg class="relative h-3.5 w-3.5 text-white stepper-tick-in" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.4 7.4a1 1 0 01-1.4 0L3.3 9.5a1 1 0 111.4-1.4l3.6 3.6 6.7-6.7a1 1 0 011.4 0z" clip-rule="evenodd" />
+                </svg>
+              </template>
+              <template x-if="stages[stage].status === 'failed'">
+                <svg class="relative h-3.5 w-3.5 text-white stepper-shake" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4.3 4.3a1 1 0 011.4 0L10 8.6l4.3-4.3a1 1 0 111.4 1.4L11.4 10l4.3 4.3a1 1 0 01-1.4 1.4L10 11.4l-4.3 4.3a1 1 0 01-1.4-1.4L8.6 10 4.3 5.7a1 1 0 010-1.4z" clip-rule="evenodd" />
+                </svg>
+              </template>
+            </span>
+            <div class="min-w-0 md:text-center">
+              <div class="text-sm font-medium text-slate-700" x-text="stageLabels[stage]"></div>
+              <div class="text-xs text-slate-400" x-text="formatMs(stages[stage].ms)"></div>
+              <div class="text-xs text-slate-500 mt-0.5 truncate md:max-w-[8.5rem] md:mx-auto" x-text="stepNoteShort(stage)" :title="stepNoteFull(stage)"></div>
+            </div>
+          </li>
+        </template>
+      </ol>
+    </div>
+
+    <!-- Result header -->
+    <div
+      x-show="decision" x-cloak
+      x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0 translate-y-2"
+      x-transition:enter-end="opacity-100 translate-y-0"
+      class="bg-white rounded-xl shadow-sm p-6 mb-6"
+    >
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-2xl font-semibold text-slate-900">
+              Invoice <span x-text="invoiceData?.invoice_number || '—'"></span> from <span x-text="invoiceData?.vendor_name || 'Unknown vendor'"></span>
+            </h2>
+            <span class="text-xs font-semibold rounded-full px-2.5 py-1" :class="badgeClass(decision?.outcome)" x-text="decision?.outcome"></span>
+          </div>
+          <p class="mt-2 text-sm text-slate-600" x-text="decision?.summary"></p>
+          <p class="mt-1 text-sm font-medium text-slate-800" x-text="decision?.next_action"></p>
+          <template x-if="duplicateLinkRunId()">
+            <a
+              :href="'/?run_id=' + duplicateLinkRunId()"
+              class="inline-block mt-1 text-sm font-medium text-brand hover:underline"
+            >
+              Open the earlier run →
+            </a>
+          </template>
+        </div>
+        <button
+          type="button"
+          @click="processAnother()"
+          class="shrink-0 text-sm font-medium bg-brand bg-brand-hover text-white rounded-md px-4 py-2"
+        >
+          Process another invoice
+        </button>
+      </div>
+    </div>
+
+    <!-- Two columns: invoice details + checks -->
+    <div
+      x-show="invoiceData" x-cloak
+      x-transition:enter="transition ease-out duration-300 delay-75"
+      x-transition:enter-start="opacity-0 translate-y-2"
+      x-transition:enter-end="opacity-100 translate-y-0"
+      class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"
+    >
+      <!-- Invoice details -->
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <h2 class="text-sm font-semibold text-slate-900 mb-4">Invoice details</h2>
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-3">
+          <template x-for="field in ['vendor_name','vendor_gstin','invoice_number','invoice_date','po_reference','currency','subtotal','tax_amount','total']" :key="field">
+            <div>
+              <dt class="text-xs text-slate-500 capitalize" x-text="field.replaceAll('_', ' ')"></dt>
+              <dd class="text-sm mt-0.5">
+                <template x-if="invoiceData && invoiceData[field] !== null && invoiceData[field] !== undefined">
+                  <span
+                    class="text-slate-800"
+                    x-text="['subtotal','tax_amount','total'].includes(field) ? formatMoney(invoiceData[field]) : invoiceData[field]"
+                  ></span>
+                </template>
+                <template x-if="!invoiceData || invoiceData[field] === null || invoiceData[field] === undefined">
+                  <span class="inline-block bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5 text-xs">Not found</span>
+                </template>
+              </dd>
+            </div>
+          </template>
+        </dl>
+      </div>
+
+      <!-- Checks -->
+      <div class="bg-white rounded-xl shadow-sm p-5" x-effect="updateChecksChart()">
+        <h2 class="text-sm font-semibold text-slate-900 mb-4">Checks</h2>
+        <div class="flex items-center gap-6">
+          <div class="relative w-28 h-28 shrink-0">
+            <canvas x-ref="checksChart" width="112" height="112"></canvas>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none px-2">
+              <span class="text-xs font-semibold text-slate-800 text-center" x-text="checksSummary"></span>
+            </div>
+          </div>
+          <div class="flex-1 space-y-2.5">
+            <template x-for="stage in ['validate','match_vendor','match_po','duplicates']" :key="stage">
+              <div>
+                <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+                  <span x-text="stageLabels[stage]"></span>
+                  <span x-text="stageProgress(stage).pass + '/' + stageProgress(stage).total"></span>
+                </div>
+                <div class="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div class="h-full rounded-full transition-all" :class="stageProgress(stage).color" :style="'width:' + stageProgress(stage).pct + '%'"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Line items -->
+    <div
+      x-show="lineMatches.length" x-cloak
+      x-transition:enter="transition ease-out duration-300 delay-100"
+      x-transition:enter-start="opacity-0 translate-y-2"
+      x-transition:enter-end="opacity-100 translate-y-0"
+      class="bg-white rounded-xl shadow-sm overflow-hidden mb-6"
+    >
+      <h2 class="text-sm font-semibold text-slate-900 px-5 pt-5">Line items</h2>
+      <div class="overflow-x-auto mt-3">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+            <tr>
+              <th class="text-left px-5 py-2">Description</th>
+              <th class="text-right px-5 py-2">Qty invoiced / on PO</th>
+              <th class="text-right px-5 py-2">Unit price invoice / PO</th>
+              <th class="text-right px-5 py-2">Amount</th>
+              <th class="text-left px-5 py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(line, idx) in lineMatches" :key="idx">
+              <tr class="border-t border-slate-100">
+                <td class="px-5 py-3 text-slate-700" x-text="line.description"></td>
+                <td class="px-5 py-3 text-right" :class="line.qty_status === 'fail' ? 'bg-rose-50' : ''">
+                  <div :class="line.qty_status === 'fail' ? 'text-rose-700 font-medium' : 'text-slate-700'">
+                    <span x-text="formatQty(line.invoice_qty)"></span>
+                    <span class="text-slate-400"> / </span>
+                    <span x-text="line.po_qty !== null ? formatQty(line.po_qty) : '—'"></span>
+                  </div>
+                  <div class="text-xs text-rose-600" x-show="qtyDelta(line)" x-text="qtyDelta(line)"></div>
+                </td>
+                <td class="px-5 py-3 text-right" :class="line.price_status === 'fail' ? 'bg-rose-50' : ''">
+                  <div :class="line.price_status === 'fail' ? 'text-rose-700 font-medium' : 'text-slate-700'">
+                    <span x-text="formatMoney(line.invoice_pre_tax_unit_price ?? line.invoice_unit_price)"></span>
+                    <span class="text-slate-400"> / </span>
+                    <span x-text="line.po_unit_price !== null ? formatMoney(line.po_unit_price) : '—'"></span>
+                  </div>
+                  <div class="text-xs text-rose-600" x-show="priceDelta(line)" x-text="priceDelta(line)"></div>
+                </td>
+                <td class="px-5 py-3 text-right text-slate-700" x-text="formatMoney(line.invoice_amount)"></td>
+                <td class="px-5 py-3">
+                  <span class="text-xs rounded-full px-2 py-0.5" :class="lineStatusInfo(line).cls" x-text="lineStatusInfo(line).label"></span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+      <div class="h-5"></div>
+    </div>
+
+    <!-- Rule results -->
+    <div
+      x-show="ruleResults.length" x-cloak
+      x-transition:enter="transition ease-out duration-300 delay-150"
+      x-transition:enter-start="opacity-0 translate-y-2"
+      x-transition:enter-end="opacity-100 translate-y-0"
+      class="bg-white rounded-xl shadow-sm p-5"
+    >
+      <h2 class="text-sm font-semibold text-slate-900 mb-4">Rule results</h2>
+      <template x-for="stage in ['validate','match_vendor','match_po','duplicates']" :key="stage">
+        <div x-show="resultsForStage(stage).length" class="mb-4 last:mb-0">
+          <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" x-text="stageLabels[stage]"></h3>
+          <ul class="space-y-2">
+            <template x-for="r in sortedResultsForStage(stage)" :key="r.rule_id">
+              <li class="border border-slate-200 rounded-lg p-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-medium text-slate-800" x-text="r.rule_id + ' — ' + r.name"></span>
+                  <span class="text-xs rounded-full px-2 py-0.5" :class="badgeClass(r.status)" x-text="r.status"></span>
+                </div>
+                <p class="text-sm text-slate-600 mt-1" x-text="r.message"></p>
+                <details class="mt-2" x-show="Object.keys(r.evidence || {}).length">
+                  <summary class="text-xs text-slate-500">Evidence</summary>
+                  <pre class="text-xs bg-slate-50 rounded p-2 mt-1 overflow-x-auto" x-text="JSON.stringify(r.evidence, null, 2)"></pre>
+                </details>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </template>
+    </div>
+  </div>
+  </div>
 </body>
 </html>

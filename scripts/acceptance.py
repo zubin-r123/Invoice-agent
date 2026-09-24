@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.llm import extract_from_images, extract_from_text
+from app import cache
 from app.pipeline import decide, duplicates, match, validate
 from app.pipeline.read import read_pdf
 
@@ -33,7 +33,7 @@ def run_one(path: Path) -> tuple[str, list[str]]:
     file_hash = hashlib.sha256(pdf_bytes).hexdigest()
 
     result = read_pdf(pdf_bytes)
-    invoice = extract_from_text(result.text) if result.mode == "text" else extract_from_images(result.images)
+    invoice, _was_cached = cache.extract_cached(file_hash, result.mode, result.text, result.images)
 
     rule_results = []
     rule_results += validate.run(invoice)
@@ -41,10 +41,10 @@ def run_one(path: Path) -> tuple[str, list[str]]:
     vendor, ven_results = match.match_vendor(invoice)
     rule_results += ven_results
 
-    _po_number, po_results = match.match_po(invoice, vendor)
+    _po_number, po_results, _line_matches = match.match_po(invoice, vendor)
     rule_results += po_results
 
-    rule_results += duplicates.check(invoice, file_hash, vendor, previous_hashes=set(), previous_invoices=[])
+    rule_results += duplicates.check(invoice, file_hash, vendor, previous_hashes={}, previous_invoices=[])
 
     outcome, reasons = decide.decide(rule_results)
     return outcome, reasons

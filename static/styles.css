@@ -1,0 +1,139 @@
+[x-cloak] { display: none !important; }
+
+:root {
+  --brand-green: #1F6F4A;
+  --brand-green-dark: #175A3B;
+  --brand-green-50: #EAF3EE;
+  --bg-page: #F6F7F9;
+}
+
+.bg-page { background-color: var(--bg-page); }
+.bg-brand { background-color: var(--brand-green); }
+.bg-brand-hover:hover { background-color: var(--brand-green-dark); }
+.text-brand { color: var(--brand-green); }
+.border-brand { border-color: var(--brand-green); }
+.bg-brand-50 { background-color: var(--brand-green-50); }
+
+/* ---------- Pipeline stepper ---------- */
+
+.stepper {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .stepper { flex-direction: row; align-items: flex-start; }
+}
+
+.stepper-item {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.75rem;
+  position: relative;
+  padding: 0.625rem 0;
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.stepper-item > div {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .stepper-item {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 0 0.5rem;
+  }
+}
+
+.stepper-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  background: #e2e8f0;
+  transition: background-color 0.3s ease;
+  left: 12px;
+  top: 2.25rem;
+  width: 2px;
+  height: calc(100% - 0.5rem);
+}
+
+@media (min-width: 768px) {
+  .stepper-item:not(:last-child)::after {
+    left: calc(50% + 15px);
+    top: 12px;
+    width: calc(100% - 30px);
+    height: 2px;
+  }
+}
+
+.stepper-item.is-done:not(:last-child)::after,
+.stepper-item.is-failed:not(:last-child)::after {
+  background: var(--brand-green);
+}
+
+.stepper-dot {
+  flex-shrink: 0;
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepper-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--brand-green-50);
+}
+
+.stepper-tick-in { animation: tick-in 0.25s ease-out; }
+@keyframes tick-in {
+  from { transform: scale(0.5); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.stepper-shake { animation: shake 0.3s ease-in-out; }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepper-tick-in,
+  .stepper-shake,
+  .animate-ping,
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
+  }
+}
+
+/* ---------- Progressive reveal ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  [x-transition\:enter],
+  [x-transition\:enter-start],
+  [x-transition\:enter-end] {
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* ---------- Misc ---------- */
+
+details > summary {
+  cursor: pointer;
+}
+
+details > summary::-webkit-details-marker {
+  color: #94a3b8;
+}

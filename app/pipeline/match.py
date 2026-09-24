@@ -21,6 +21,7 @@ from app.config import (
     VENDOR_MATCH_REVIEW,
 )
 from app.data import POLine, Vendor
+from app.format import format_inr, format_qty
 from app.models import InvoiceData, LineItem, RuleResult
 
 
@@ -96,25 +97,26 @@ class LinePair:
     score: float
 
 
-def match_po(invoice: InvoiceData, vendor: Vendor | None) -> tuple[str | None, list[RuleResult]]:
+def match_po(invoice: InvoiceData, vendor: Vendor | None) -> tuple[str | None, list[RuleResult], list[dict]]:
     if vendor is None:
-        return None, _skip_po_results("Vendor not identified, cannot match PO")
+        return None, _skip_po_results("Vendor not identified, cannot match PO"), []
 
     po_number, po01 = _po01_identify(invoice, vendor)
 
     if po_number is None:
-        return None, [po01, *_skip_po_results("No PO identified", skip_po01=True)]
+        return None, [po01, *_skip_po_results("No PO identified", skip_po01=True)], []
 
     po_lines = data.po_lines(po_number)
     po02 = _po02_belongs_and_open(po_number, po_lines, vendor)
 
     matched_pairs, unmatched_lines = _match_lines_to_po(invoice.line_items, po_lines)
-    po03 = _po03_lines_mapped(unmatched_lines)
+    po03 = _po03_lines_mapped(matched_pairs, unmatched_lines)
     po04 = _po04_price_tolerance(invoice, matched_pairs)
     po05 = _po05_quantity_balance(po_number, matched_pairs)
     v05 = _v05_tax_matches(invoice, matched_pairs)
+    line_matches = _build_line_matches(invoice, po_number, matched_pairs)
 
-    return po_number, [po01, po02, po03, po04, po05, v05]
+    return po_number, [po01, po02, po03, po04, po05, v05], line_matches
 
 
 _PO_RULE_NAMES = [
@@ -271,20 +273,24 @@ def _match_lines_to_po(invoice_lines: list[LineItem], po_lines: list[POLine]) ->
     return pairs, unmatched
 
 
-def _po03_lines_mapped(unmatched_lines: list[LineItem]) -> RuleResult:
+def _po03_lines_mapped(matched_pairs: list["LinePair"], unmatched_lines: list[LineItem]) -> RuleResult:
+    total = len(matched_pairs) + len(unmatched_lines)
     if unmatched_lines:
         return RuleResult(
             rule_id="PO-03",
             name="Invoice lines map to PO lines",
             status="fail",
-            message=f"{len(unmatched_lines)} line(s) did not match any PO line",
+            message=(
+                f"{len(unmatched_lines)} of {total} line(s) did not match any PO line: "
+                + "; ".join(li.description for li in unmatched_lines)
+            ),
             evidence={"unmatched_descriptions": [li.description for li in unmatched_lines]},
         )
     return RuleResult(
         rule_id="PO-03",
         name="Invoice lines map to PO lines",
         status="pass",
-        message="All invoice lines matched to PO lines",
+        message=f"All {total} invoice line(s) matched to PO lines",
         evidence={},
     )
 
@@ -332,14 +338,19 @@ def _po04_price_tolerance(invoice: InvoiceData, pairs: list[LinePair]) -> RuleRe
             rule_id="PO-04",
             name="Unit price within tolerance",
             status="fail",
-            message=f"Price variance {worst_evidence['pct_delta']}% exceeds tolerance {PRICE_TOLERANCE_PCT}%",
+            message=(
+                f"{worst_evidence['description']}: invoice price "
+                f"{format_inr(Decimal(worst_evidence['invoice_pre_tax_unit_price']))} vs PO price "
+                f"{format_inr(Decimal(worst_evidence['po_unit_price']))} — "
+                f"{worst_evidence['pct_delta']}% over the {PRICE_TOLERANCE_PCT}% tolerance"
+            ),
             evidence=worst_evidence or {},
         )
     return RuleResult(
         rule_id="PO-04",
         name="Unit price within tolerance",
         status="pass",
-        message="All matched line prices within tolerance",
+        message=f"All matched line prices within the {PRICE_TOLERANCE_PCT}% tolerance (largest variance {round(worst_pct, 2)}%)",
         evidence={"worst_pct_delta": str(round(worst_pct, 2))},
     )
 
@@ -355,12 +366,15 @@ def _po05_quantity_balance(po_number: str, pairs: list[LinePair]) -> RuleResult:
         )
 
     overages = []
+    overage_details = []
+    ok_details = []
     for pair in pairs:
         if pair.invoice_line.quantity is None:
             continue
         already = data.qty_billed(po_number, pair.po_line.line_no)
         remaining = pair.po_line.qty - already
         if pair.invoice_line.quantity > remaining:
+            overage = pair.invoice_line.quantity - remaining
             overages.append(
                 {
                     "description": pair.invoice_line.description,
@@ -369,23 +383,35 @@ def _po05_quantity_balance(po_number: str, pairs: list[LinePair]) -> RuleResult:
                     "po_qty": str(pair.po_line.qty),
                     "remaining_before_this_invoice": str(remaining),
                     "invoice_qty": str(pair.invoice_line.quantity),
-                    "overage": str(pair.invoice_line.quantity - remaining),
+                    "overage": str(overage),
                 }
             )
+            overage_details.append(
+                f"{pair.invoice_line.description}: ordered {format_qty(pair.po_line.qty)} · "
+                f"already billed {format_qty(already)} · this invoice "
+                f"{format_qty(pair.invoice_line.quantity)} → {format_qty(overage)} over. "
+                f"{format_qty(remaining)} remaining."
+            )
+        else:
+            remaining_after = remaining - pair.invoice_line.quantity
+            ok_details.append(f"{pair.invoice_line.description}: {format_qty(remaining_after)} remaining after this invoice")
 
     if overages:
         return RuleResult(
             rule_id="PO-05",
             name="Quantity within PO balance",
             status="fail",
-            message=f"{len(overages)} line(s) over-bill their PO balance",
+            message=f"{len(overages)} of {len(pairs)} line(s) over-bill their PO balance — " + "; ".join(overage_details),
             evidence={"overages": overages},
         )
     return RuleResult(
         rule_id="PO-05",
         name="Quantity within PO balance",
         status="pass",
-        message="All matched line quantities within PO balance",
+        message=(
+            f"All {len(pairs)} matched line(s) within PO balance — " + "; ".join(ok_details)
+            if ok_details else "All matched line quantities within PO balance"
+        ),
         evidence={},
     )
 
@@ -413,13 +439,76 @@ def _v05_tax_matches(invoice: InvoiceData, pairs: list[LinePair]) -> RuleResult:
             rule_id="V-05",
             name="Tax amount matches PO tax rate",
             status="pass",
-            message=f"Tax amount ({invoice.tax_amount}) matches expected ({expected_tax})",
+            message=f"Tax amount ({format_inr(invoice.tax_amount)}) matches the expected ({format_inr(expected_tax)}) based on the PO's tax rate",
             evidence=evidence,
         )
+    diff = invoice.tax_amount - expected_tax
+    over_under = "over" if diff > 0 else "under"
     return RuleResult(
         rule_id="V-05",
         name="Tax amount matches PO tax rate",
         status="warn",
-        message=f"Tax amount ({invoice.tax_amount}) differs from expected ({expected_tax})",
+        message=(
+            f"Tax amount ({format_inr(invoice.tax_amount)}) differs from the expected "
+            f"({format_inr(expected_tax)}) based on the PO's tax rate — {format_inr(abs(diff))} {over_under}"
+        ),
         evidence=evidence,
     )
+
+
+def _build_line_matches(invoice: InvoiceData, po_number: str, pairs: list[LinePair]) -> list[dict]:
+    """One entry per invoice line (in invoice order) with the matched PO line's qty/price
+    alongside it, for the UI's per-line invoice-vs-PO table. Unmatched lines get PO fields None."""
+    pair_by_line = {id(pair.invoice_line): pair for pair in pairs}
+    matches = []
+    for li in invoice.line_items:
+        pair = pair_by_line.get(id(li))
+        if pair is None:
+            matches.append({
+                "description": li.description,
+                "matched": False,
+                "invoice_qty": str(li.quantity) if li.quantity is not None else None,
+                "invoice_unit_price": str(li.unit_price) if li.unit_price is not None else None,
+                "invoice_pre_tax_unit_price": None,
+                "invoice_amount": str(li.amount) if li.amount is not None else None,
+                "po_line_no": None,
+                "po_qty": None,
+                "po_unit_price": None,
+                "po_already_billed": None,
+                "po_remaining_before": None,
+                "price_status": None,
+                "qty_status": None,
+            })
+            continue
+
+        pre_tax = _pre_tax_unit_price(invoice, pair)
+        po_line = pair.po_line
+
+        price_status = None
+        if pre_tax is not None and po_line.unit_price:
+            pct_delta = abs(pre_tax - po_line.unit_price) / po_line.unit_price * 100
+            price_status = "fail" if pct_delta > PRICE_TOLERANCE_PCT else "pass"
+
+        already_billed = data.qty_billed(po_number, po_line.line_no)
+        remaining_before = po_line.qty - already_billed
+
+        qty_status = None
+        if li.quantity is not None:
+            qty_status = "fail" if li.quantity > remaining_before else "pass"
+
+        matches.append({
+            "description": li.description,
+            "matched": True,
+            "invoice_qty": str(li.quantity) if li.quantity is not None else None,
+            "invoice_unit_price": str(li.unit_price) if li.unit_price is not None else None,
+            "invoice_pre_tax_unit_price": str(pre_tax) if pre_tax is not None else None,
+            "invoice_amount": str(li.amount) if li.amount is not None else None,
+            "po_line_no": po_line.line_no,
+            "po_qty": str(po_line.qty),
+            "po_unit_price": str(po_line.unit_price),
+            "po_already_billed": str(already_billed),
+            "po_remaining_before": str(remaining_before),
+            "price_status": price_status,
+            "qty_status": qty_status,
+        })
+    return matches

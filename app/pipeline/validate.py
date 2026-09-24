@@ -8,6 +8,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.config import MAX_INVOICE_AGE_DAYS, ROUNDING_TOLERANCE
+from app.format import format_inr
 from app.models import InvoiceData, RuleResult
 
 
@@ -33,7 +34,7 @@ def _v01_required_fields(invoice: InvoiceData) -> RuleResult:
             rule_id="V-01",
             name="Required fields present",
             status="warn",
-            message=f"Missing required field(s): {', '.join(missing)}",
+            message=f"{len(missing)} required field(s) missing: {', '.join(missing)}",
             evidence={"missing_fields": missing},
         )
     return RuleResult(
@@ -72,14 +73,19 @@ def _v02_line_sum(invoice: InvoiceData) -> RuleResult:
             rule_id="V-02",
             name="Line items sum to subtotal",
             status="pass",
-            message=f"Line items sum ({line_sum}) matches {label} ({compare_to})",
+            message=f"Line items sum ({format_inr(line_sum)}) matches the {label} ({format_inr(compare_to)})",
             evidence=evidence,
         )
+    diff = line_sum - compare_to
+    over_under = "over" if diff > 0 else "under"
     return RuleResult(
         rule_id="V-02",
         name="Line items sum to subtotal",
         status="fail",
-        message=f"Line items sum ({line_sum}) does not match {label} ({compare_to})",
+        message=(
+            f"Line items sum ({format_inr(line_sum)}) does not match the {label} "
+            f"({format_inr(compare_to)}) — {format_inr(abs(diff))} {over_under}"
+        ),
         evidence=evidence,
     )
 
@@ -106,14 +112,23 @@ def _v03_subtotal_tax_total(invoice: InvoiceData) -> RuleResult:
             rule_id="V-03",
             name="Subtotal + tax = total",
             status="pass",
-            message=f"Subtotal + tax ({computed_total}) matches total ({invoice.total})",
+            message=(
+                f"Subtotal ({format_inr(invoice.subtotal)}) + tax ({format_inr(invoice.tax_amount)}) "
+                f"= {format_inr(computed_total)}, matches the invoice total ({format_inr(invoice.total)})"
+            ),
             evidence=evidence,
         )
+    diff = computed_total - invoice.total
+    over_under = "over" if diff > 0 else "under"
     return RuleResult(
         rule_id="V-03",
         name="Subtotal + tax = total",
         status="fail",
-        message=f"Subtotal + tax ({computed_total}) does not match total ({invoice.total})",
+        message=(
+            f"Subtotal ({format_inr(invoice.subtotal)}) + tax ({format_inr(invoice.tax_amount)}) "
+            f"= {format_inr(computed_total)}, but the invoice states total {format_inr(invoice.total)} "
+            f"— {format_inr(abs(diff))} {over_under}"
+        ),
         evidence=evidence,
     )
 
