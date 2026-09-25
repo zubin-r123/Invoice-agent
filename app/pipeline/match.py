@@ -114,7 +114,7 @@ def match_po(invoice: InvoiceData, vendor: Vendor | None) -> tuple[str | None, l
     po04 = _po04_price_tolerance(invoice, matched_pairs)
     po05 = _po05_quantity_balance(po_number, matched_pairs)
     v05 = _v05_tax_matches(invoice, matched_pairs)
-    line_matches = _build_line_matches(invoice, po_number, matched_pairs)
+    line_matches = _build_line_matches(invoice, po_number, matched_pairs, po_lines)
 
     return po_number, [po01, po02, po03, po04, po05, v05], line_matches
 
@@ -456,10 +456,15 @@ def _v05_tax_matches(invoice: InvoiceData, pairs: list[LinePair]) -> RuleResult:
     )
 
 
-def _build_line_matches(invoice: InvoiceData, po_number: str, pairs: list[LinePair]) -> list[dict]:
+def _build_line_matches(
+    invoice: InvoiceData, po_number: str, pairs: list[LinePair], po_lines: list[POLine]
+) -> list[dict]:
     """One entry per invoice line (in invoice order) with the matched PO line's qty/price
-    alongside it, for the UI's per-line invoice-vs-PO table. Unmatched lines get PO fields None."""
+    alongside it, for the UI's per-line invoice-vs-PO table. Unmatched lines get PO fields None.
+    PO lines with no matching invoice line are appended afterward, flagged not_billed, so the UI
+    can show what the PO still has outstanding."""
     pair_by_line = {id(pair.invoice_line): pair for pair in pairs}
+    billed_po_line_nos = {pair.po_line.line_no for pair in pairs}
     matches = []
     for li in invoice.line_items:
         pair = pair_by_line.get(id(li))
@@ -511,4 +516,26 @@ def _build_line_matches(invoice: InvoiceData, po_number: str, pairs: list[LinePa
             "price_status": price_status,
             "qty_status": qty_status,
         })
+
+    for po_line in po_lines:
+        if po_line.line_no in billed_po_line_nos:
+            continue
+        already_billed = data.qty_billed(po_number, po_line.line_no)
+        matches.append({
+            "description": po_line.description,
+            "matched": None,
+            "not_billed": True,
+            "invoice_qty": None,
+            "invoice_unit_price": None,
+            "invoice_pre_tax_unit_price": None,
+            "invoice_amount": None,
+            "po_line_no": po_line.line_no,
+            "po_qty": str(po_line.qty),
+            "po_unit_price": str(po_line.unit_price),
+            "po_already_billed": str(already_billed),
+            "po_remaining_before": str(po_line.qty - already_billed),
+            "price_status": None,
+            "qty_status": None,
+        })
+
     return matches

@@ -6,14 +6,14 @@
   <title>ClearPay — Dashboard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%B3</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/static/styles.css" />
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
   <script defer src="/static/app.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="min-h-screen bg-page text-slate-700 font-sans" style="font-family: 'Inter', sans-serif;">
+<body class="min-h-screen bg-page text-slate-700 font-sans" style="font-family: 'DM Sans', sans-serif; color: var(--ink);">
   <div x-data="dashboardView()" x-init="init()">
   <nav class="bg-brand text-white">
     <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -27,7 +27,7 @@
       <button
         type="button"
         @click="resetDemo()"
-        class="text-xs font-medium text-white/80 hover:text-white border border-white/25 hover:border-white/40 rounded-md px-3 py-1.5"
+        class="mono text-xs font-medium text-white/80 hover:text-white border border-white/25 hover:border-white/40 rounded-full px-3 py-1.5"
       >
         Reset demo
       </button>
@@ -36,8 +36,8 @@
 
   <div class="max-w-5xl mx-auto px-4 py-8" x-show="!loading" x-cloak>
     <div class="mb-6">
-      <h1 class="text-lg font-semibold text-slate-900">Run history</h1>
-      <p class="text-sm text-slate-500">History of every invoice run.</p>
+      <h1 class="text-2xl font-semibold text-navy">Dashboard</h1>
+      <p class="text-sm" style="color: var(--muted)">Every invoice ClearPay has processed</p>
     </div>
 
     <!-- Empty state -->
@@ -55,21 +55,21 @@
 
       <!-- 1. KPI row -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="rounded-xl bg-white shadow-sm p-5">
-          <p class="text-xs text-slate-500 font-medium uppercase tracking-wide">Invoices processed</p>
-          <p class="text-2xl font-semibold text-slate-900 mt-1" x-text="kpiDisplay.invoicesProcessed"></p>
+        <div class="tile p-5">
+          <p class="label-mono">Invoices processed</p>
+          <p class="kpi-value mt-1" x-text="kpiDisplay.invoicesProcessed"></p>
         </div>
-        <div class="rounded-xl bg-white shadow-sm p-5">
-          <p class="text-xs text-slate-500 font-medium uppercase tracking-wide">Approved value</p>
-          <p class="text-2xl font-semibold text-slate-900 mt-1" x-text="kpiDisplay.approvedValue"></p>
+        <div class="tile p-5">
+          <p class="label-mono">Approved value</p>
+          <p class="kpi-value kpi-value-mint mt-1" x-text="kpiDisplay.approvedValue"></p>
         </div>
-        <div class="rounded-xl bg-white shadow-sm p-5">
-          <p class="text-xs text-slate-500 font-medium uppercase tracking-wide">Auto-approved</p>
-          <p class="text-2xl font-semibold text-slate-900 mt-1" x-text="kpiDisplay.autoApprovedPct"></p>
+        <div class="tile p-5">
+          <p class="label-mono">Auto-approved</p>
+          <p class="kpi-value mt-1" x-text="kpiDisplay.autoApprovedPct"></p>
         </div>
-        <div class="rounded-xl bg-white shadow-sm p-5">
-          <p class="text-xs text-slate-500 font-medium uppercase tracking-wide">Avg. processing time</p>
-          <p class="text-2xl font-semibold text-slate-900 mt-1" x-text="kpiDisplay.avgProcessingMs"></p>
+        <div class="tile p-5">
+          <p class="label-mono">Avg. processing time</p>
+          <p class="kpi-value mt-1" x-text="kpiDisplay.avgProcessingMs"></p>
         </div>
       </div>
 
@@ -81,7 +81,7 @@
         x-transition:enter-end="opacity-100 translate-y-0"
       >
         <!-- Outcomes -->
-        <div class="bg-white rounded-xl shadow-sm p-5">
+        <div class="tile p-5">
           <h2 class="text-sm font-semibold text-slate-900 mb-4">Outcomes</h2>
           <div class="flex items-center gap-6">
             <div class="relative w-24 h-24 shrink-0">
@@ -110,9 +110,14 @@
         </div>
 
         <!-- Needs attention -->
-        <div class="bg-white rounded-xl shadow-sm p-5">
+        <div class="tile p-5">
           <h2 class="text-sm font-semibold text-slate-900 mb-4">Needs attention</h2>
-          <p class="text-sm text-slate-400" x-show="!detailsLoading && !attentionRuns.length">Nothing needs attention.</p>
+          <div class="text-center py-4" x-show="!detailsLoading && !attentionRuns.length">
+            <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="var(--approve-text)" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm" style="color: var(--approve-text)">All clear</p>
+          </div>
           <p class="text-sm text-slate-400" x-show="detailsLoading">Loading…</p>
           <ul class="space-y-3" x-show="!detailsLoading">
             <template x-for="run in attentionRuns" :key="run.run_id">
@@ -128,7 +133,7 @@
         </div>
 
         <!-- Most common issues -->
-        <div class="bg-white rounded-xl shadow-sm p-5">
+        <div class="tile p-5">
           <h2 class="text-sm font-semibold text-slate-900 mb-4">Most common issues</h2>
           <p class="text-sm text-slate-400" x-show="!detailsLoading && !topIssues.length">No recurring issues yet.</p>
           <p class="text-sm text-slate-400" x-show="detailsLoading">Loading…</p>
@@ -140,7 +145,7 @@
                   <span class="shrink-0 ml-2" x-text="issue.count"></span>
                 </div>
                 <div class="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                  <div class="h-full rounded-full bg-rose-500 transition-all" :style="'width:' + issue.pct + '%'"></div>
+                  <div class="h-full rounded-full bar-blue transition-all" :style="'width:' + issue.pct + '%'"></div>
                 </div>
               </div>
             </template>
@@ -150,7 +155,7 @@
 
       <!-- 3. Recent runs table -->
       <div
-        class="bg-white rounded-xl shadow-sm overflow-hidden"
+        class="tile overflow-hidden"
         x-transition:enter="transition ease-out duration-300 delay-150"
         x-transition:enter-start="opacity-0 translate-y-2"
         x-transition:enter-end="opacity-100 translate-y-0"
@@ -158,29 +163,29 @@
         <h2 class="text-sm font-semibold text-slate-900 px-5 pt-5 pb-3">Recent runs</h2>
         <div class="overflow-x-auto">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+          <thead class="bg-[#E9F0FF]">
             <tr>
-              <th class="text-left px-4 py-2">Time</th>
-              <th class="text-left px-4 py-2">Vendor</th>
-              <th class="text-left px-4 py-2">Invoice No.</th>
-              <th class="text-right px-4 py-2">Total</th>
-              <th class="text-left px-4 py-2">Outcome</th>
-              <th class="text-right px-4 py-2">Duration</th>
+              <th class="text-left px-4 py-2 label-mono">Time</th>
+              <th class="text-left px-4 py-2 label-mono">Vendor</th>
+              <th class="text-left px-4 py-2 label-mono">Invoice No.</th>
+              <th class="text-right px-4 py-2 label-mono">Total</th>
+              <th class="text-left px-4 py-2 label-mono">Outcome</th>
+              <th class="text-right px-4 py-2 label-mono">Duration</th>
             </tr>
           </thead>
           <tbody>
             <template x-for="run in runs" :key="run.run_id">
-              <tr class="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" @click="window.location.href = '/?run_id=' + run.run_id">
+              <tr class="border-t border-slate-100 hover:bg-[var(--tint)] cursor-pointer" @click="window.location.href = '/?run_id=' + run.run_id">
                 <td class="px-4 py-2 text-slate-500 whitespace-nowrap" x-text="formatRunTime(run.created_at)"></td>
                 <td class="px-4 py-2">
                   <span class="block truncate max-w-[10rem]" :title="run.vendor_name || ''" x-text="run.vendor_name || '—'"></span>
                 </td>
                 <td class="px-4 py-2" x-text="run.invoice_number || '—'"></td>
-                <td class="px-4 py-2 text-right" x-text="formatMoney(run.total)"></td>
+                <td class="px-4 py-2 text-right mono" x-text="formatMoney(run.total)"></td>
                 <td class="px-4 py-2">
                   <span class="text-xs rounded-full px-2 py-0.5" :class="badgeClass(run.outcome || run.status)" x-text="outcomeLabel(run.outcome || run.status)"></span>
                 </td>
-                <td class="px-4 py-2 text-right text-slate-500" x-text="formatMs(run.duration_ms)"></td>
+                <td class="px-4 py-2 text-right text-slate-500 mono" x-text="formatMs(run.duration_ms)"></td>
               </tr>
             </template>
           </tbody>

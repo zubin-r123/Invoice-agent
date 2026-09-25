@@ -88,33 +88,28 @@ function outcomeLabel(code) {
   return OUTCOME_LABELS[code] || code || "—";
 }
 
+// Fixed per-outcome headline for the hero decision card — deterministic, not derived from the
+// LLM's (or mock mode's) summary text, which varies in shape and isn't reliably one clause.
+const OUTCOME_HEADLINES = {
+  APPROVE: "Ready to pay.",
+  NEEDS_REVIEW: "Needs a second look before paying.",
+  REJECT: "Do not pay this invoice.",
+};
+
 function badgeClass(status) {
   switch (status) {
     case "pass":
     case "APPROVE":
-      return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+      return "badge-approve";
     case "warn":
     case "NEEDS_REVIEW":
-      return "bg-amber-50 text-amber-700 border border-amber-200";
+      return "badge-review";
     case "fail":
     case "REJECT":
-      return "bg-rose-50 text-rose-700 border border-rose-200";
+      return "badge-reject";
     case "skip":
-      return "bg-slate-100 text-slate-500 border border-slate-200";
     default:
-      return "bg-slate-100 text-slate-500 border border-slate-200";
-  }
-}
-
-function stepDotClass(status) {
-  switch (status) {
-    case "running":
-    case "done":
-      return "bg-brand";
-    case "failed":
-      return "bg-rose-500";
-    default:
-      return "bg-slate-200";
+      return "badge-neutral";
   }
 }
 
@@ -150,6 +145,7 @@ document.addEventListener("alpine:init", () => {
       error: null,
       eventSource: null,
       checksSummary: "",
+      showPassed: {},
 
       init() {
         const params = new URLSearchParams(window.location.search);
@@ -157,8 +153,8 @@ document.addEventListener("alpine:init", () => {
         if (runId) this.loadFromRun(runId);
       },
 
-      stepDotClass(status) { return stepDotClass(status); },
       badgeClass(status) { return badgeClass(status); },
+      outcomeLabel(code) { return outcomeLabel(code); },
       formatMoney(v) { return formatMoney(v); },
       formatQty(v) { return formatQty(v); },
       formatMs(ms) { return formatMs(ms); },
@@ -173,6 +169,7 @@ document.addEventListener("alpine:init", () => {
         this.decision = null;
         this.error = null;
         this.checksSummary = "";
+        this.showPassed = {};
         if (this.eventSource) { this.eventSource.close(); this.eventSource = null; }
         if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
       },
@@ -194,14 +191,49 @@ document.addEventListener("alpine:init", () => {
         );
       },
 
+      passedCount(stage) {
+        return this.resultsForStage(stage).filter((r) => r.status === "pass").length;
+      },
+
+      // Failing/warning rows always show; passed rows for a stage stay collapsed behind a
+      // "Show N passed checks" toggle until the reviewer asks for them.
+      visibleResultsForStage(stage) {
+        const sorted = this.sortedResultsForStage(stage);
+        if (this.showPassed[stage]) return sorted;
+        return sorted.filter((r) => r.status !== "pass");
+      },
+
+      togglePassed(stage) {
+        this.showPassed[stage] = !this.showPassed[stage];
+      },
+
       stageProgress(stage) {
         const results = this.resultsForStage(stage).filter((r) => r.status !== "skip");
         const total = results.length;
         const pass = results.filter((r) => r.status === "pass").length;
-        let color = "bg-emerald-500";
-        if (results.some((r) => r.status === "fail")) color = "bg-rose-500";
-        else if (results.some((r) => r.status === "warn")) color = "bg-amber-500";
-        return { pct: total ? Math.round((pass / total) * 100) : 0, color, pass, total };
+        const hasIssue = results.some((r) => r.status === "fail" || r.status === "warn");
+        return { pct: total ? Math.round((pass / total) * 100) : 0, color: hasIssue ? "bar-amber" : "bar-blue", pass, total, hasIssue };
+      },
+
+      // Coin (stage circle) background: pending/running/failed map straight off the pipeline
+      // stage status; a "done" rule stage becomes amber if any of its rules fired warn/fail;
+      // decide is always the navy coin once done, regardless of the outcome it reached.
+      coinClass(stage) {
+        const s = this.stages[stage];
+        if (!s || s.status === "pending") return "coin-pending";
+        if (s.status === "running") return "coin-running";
+        if (s.status === "failed") return "coin-fail";
+        if (stage === "decide") return "coin-decide";
+        if (RULE_STAGES.includes(stage) && this.stageProgress(stage).hasIssue) return "coin-warn";
+        return "coin-done";
+      },
+
+      coinIssueNote(stage) {
+        if (!RULE_STAGES.includes(stage)) return "";
+        const progress = this.stageProgress(stage);
+        if (!progress.hasIssue) return "";
+        const bad = progress.total - progress.pass;
+        return `${bad} issue${bad === 1 ? "" : "s"}`;
       },
 
       // Visible stepper label — kept short (~18 chars) so nothing truncates or overlaps the
@@ -222,19 +254,26 @@ document.addEventListener("alpine:init", () => {
             const total = 9;
             const missing = (data.fields_missing || []).length;
             const found = Math.max(total - missing, 0);
+            if (data.mock) return `${found}/${total} (mock)`;
             return data.cached ? `${found}/${total} (cached)` : `${found}/${total} fields`;
           }
           case "validate":
           case "duplicates":
             return this._resultsNoteShort(data.results);
-          case "match_vendor":
+          case "match_vendor": {
+            const issue = this.coinIssueNote(stage);
+            if (issue) return issue;
             if (!data.vendor_name) return "Not found";
             return `${data.vendor_name.split(/\s+/)[0]} ✓`;
-          case "match_po":
+          }
+          case "match_po": {
+            const issue = this.coinIssueNote(stage);
+            if (issue) return issue;
             if (!data.po_number) return "No PO";
             return data.explicit_or_inferred === "inferred" ? `${data.po_number} ?` : data.po_number;
+          }
           case "decide":
-            return data.outcome || "";
+            return (data.outcome || "") + (data.mock ? " (mock)" : "");
           default:
             return "";
         }
@@ -270,18 +309,25 @@ document.addEventListener("alpine:init", () => {
             const total = 9;
             const missing = (data.fields_missing || []).length;
             const found = Math.max(total - missing, 0);
+            if (data.mock) return `${found}/${total} fields found (mock)`;
             return data.cached ? `${found}/${total} fields found (cached)` : `${found}/${total} fields found`;
           }
           case "validate":
           case "duplicates":
             return this._resultsNoteFull(data.results);
-          case "match_vendor":
+          case "match_vendor": {
+            const issue = this.coinIssueNote(stage);
+            if (issue) return issue;
             return data.vendor_name ? `Matched ${data.vendor_name} (${data.match_score ?? "—"})` : "Vendor not identified";
-          case "match_po":
+          }
+          case "match_po": {
+            const issue = this.coinIssueNote(stage);
+            if (issue) return issue;
             if (!data.po_number) return "No PO identified";
             return data.explicit_or_inferred === "inferred" ? `Inferred ${data.po_number}` : `Matched ${data.po_number}`;
+          }
           case "decide":
-            return data.outcome || "";
+            return (data.outcome || "") + (data.mock ? " (mock)" : "");
           default:
             return "";
         }
@@ -311,21 +357,42 @@ document.addEventListener("alpine:init", () => {
         return null;
       },
 
+      // PO-01's evidence carries the matched/inferred po_number on both a live run and a
+      // /api/runs/{id} replay, so the line items title doesn't need its own piece of state.
+      poNumber() {
+        const po01 = this.ruleResults.find((r) => r.rule_id === "PO-01");
+        return (po01 && po01.evidence && po01.evidence.po_number) || null;
+      },
+
+      decisionHeadline() {
+        return OUTCOME_HEADLINES[this.decision?.outcome] || "";
+      },
+
+      // First rule that drove the outcome away from a clean pass, for the hero card's
+      // "1 failed: {rule name}" line.
+      firstIssueResult() {
+        const fail = this.ruleResults.find((r) => r.status === "fail");
+        if (fail) return fail;
+        return this.ruleResults.find((r) => r.status === "warn") || null;
+      },
+
       lineStatusInfo(line) {
+        if (line.not_billed) return { label: "Not billed", cls: "pill-neutral" };
         if (!line.matched) return { label: "No PO match", cls: badgeClass("fail") };
-        if (line.price_status === "fail" || line.qty_status === "fail") {
-          return { label: "Mismatch", cls: badgeClass("fail") };
+        if (line.qty_status === "fail") {
+          const over = Number(line.invoice_qty) - Number(line.po_remaining_before);
+          return { label: Number.isNaN(over) ? "Over PO balance" : `Over by ${formatQty(over)}`, cls: "pill-over" };
         }
+        if (line.price_status === "fail") return { label: "Mismatch", cls: badgeClass("fail") };
         return { label: "OK", cls: badgeClass("pass") };
       },
 
       qtyDelta(line) {
         if (line.qty_status !== "fail") return null;
-        const invoiceQty = Number(line.invoice_qty);
-        const remaining = Number(line.po_remaining_before);
-        if (Number.isNaN(invoiceQty) || Number.isNaN(remaining)) return null;
-        const over = invoiceQty - remaining;
-        return over > 0 ? `${formatQty(over)} over PO balance` : null;
+        const billed = line.po_already_billed;
+        const remaining = line.po_remaining_before;
+        if (billed === null || billed === undefined || remaining === null || remaining === undefined) return null;
+        return `${formatQty(billed)} already billed · ${formatQty(remaining)} left`;
       },
 
       priceDelta(line) {
@@ -358,7 +425,7 @@ document.addEventListener("alpine:init", () => {
               labels: ["Pass", "Warn", "Fail"],
               datasets: [{
                 data: [counts.pass, counts.warn, counts.fail],
-                backgroundColor: ["#10b981", "#f59e0b", "#f43f5e"],
+                backgroundColor: ["#0057FF", "#E08600", "#C21A5E"],
                 borderWidth: 0,
               }],
             },
@@ -586,7 +653,9 @@ document.addEventListener("alpine:init", () => {
             type: "doughnut",
             data: {
               labels: ["Approved", "Needs review", "Rejected"],
-              datasets: [{ data, backgroundColor: ["#10b981", "#f59e0b", "#f43f5e"], borderWidth: 0 }],
+              // Kept in sync with --viz-approve/--viz-review/--viz-reject in styles.css —
+              // Chart.js canvas fillStyle can't resolve CSS var(), so these are hardcoded.
+              datasets: [{ data, backgroundColor: ["#10B981", "#E08600", "#C21A5E"], borderWidth: 0 }],
             },
             options: {
               cutout: "70%",
@@ -609,8 +678,8 @@ document.addEventListener("alpine:init", () => {
             label: outcomeLabel(key),
             count,
             pct: total ? Math.round((count / total) * 100) : 0,
-            dotClass: { APPROVE: "bg-emerald-500", NEEDS_REVIEW: "bg-amber-500", REJECT: "bg-rose-500" }[key],
-            barClass: { APPROVE: "bg-emerald-500", NEEDS_REVIEW: "bg-amber-500", REJECT: "bg-rose-500" }[key],
+            dotClass: { APPROVE: "dot-approve", NEEDS_REVIEW: "dot-review", REJECT: "dot-reject" }[key],
+            barClass: { APPROVE: "bar-approve", NEEDS_REVIEW: "bar-review", REJECT: "bar-reject" }[key],
           };
         });
       },

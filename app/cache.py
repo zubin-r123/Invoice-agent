@@ -8,14 +8,14 @@ deployed instance (e.g. Render) always runs real extraction. Safe to delete .cac
 import os
 from pathlib import Path
 
-from app.llm import extract_from_images, extract_from_text
+from app.llm import extract_from_images, extract_from_text, mock_enabled
 from app.models import InvoiceData
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / ".cache"
 
 
 def enabled() -> bool:
-    return os.environ.get("EXTRACT_CACHE") == "1"
+    return os.environ.get("EXTRACT_CACHE") == "1" or mock_enabled()
 
 
 def _path(file_hash: str) -> Path:
@@ -47,6 +47,8 @@ def extract_cached(file_hash: str, mode: str, text: str, images: list[bytes]) ->
     cached = get(file_hash)
     if cached is not None:
         return cached, True
+    if mock_enabled():
+        raise RuntimeError("Not available in mock mode")
     invoice = extract_from_text(text) if mode == "text" else extract_from_images(images)
     set(file_hash, invoice)
     return invoice, False

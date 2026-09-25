@@ -8,6 +8,10 @@ from app.models import InvoiceData, RuleResult
 _client = None
 
 
+def mock_enabled() -> bool:
+    return os.environ.get("MOCK_LLM") == "1"
+
+
 def get_client():
     global _client
     if _client is not None:
@@ -145,12 +149,29 @@ Rules for the writing itself:
   involved rather than speaking generically."""
 
 
+_NEXT_ACTION_BY_OUTCOME = {
+    "APPROVE": "Route to AP for payment.",
+    "NEEDS_REVIEW": "Review the flagged items above before approving.",
+    "REJECT": "Do not pay; investigate the rejection reason above.",
+}
+
+
+def _deterministic_explain(
+    rule_results: list[RuleResult], outcome: str, reasons: list[str]
+) -> tuple[str, str]:
+    flagged_messages = [r.message for r in rule_results if r.rule_id in reasons]
+    summary = " ".join(flagged_messages) if flagged_messages else "All checks passed."
+    return summary, _NEXT_ACTION_BY_OUTCOME[outcome]
+
+
 def explain(
     invoice: InvoiceData,
     rule_results: list[RuleResult],
     outcome: str,
     reasons: list[str],
 ) -> tuple[str, str]:
+    if mock_enabled():
+        return _deterministic_explain(rule_results, outcome, reasons)
     client = get_client()
     lines = [
         f"{r.rule_id} [{r.status}]: {r.message} | evidence: {r.evidence}" for r in rule_results

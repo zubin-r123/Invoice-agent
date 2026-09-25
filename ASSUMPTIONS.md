@@ -140,3 +140,32 @@
   subtotal/tax_amount/total and the dashboard's total column. Rule `evidence` dicts and the raw
   `/api/runs` JSON are left as plain unformatted decimal strings — formatting is presentation-only
   and happens at render time, not in stored/transmitted data.
+
+## UI redesign — Mock mode + visual restyle
+
+- `MOCK_LLM=1` makes `app/cache.py`'s `enabled()` return `True` even if `EXTRACT_CACHE` is `0`,
+  so mock mode alone is sufficient to read `.cache/`. A cache miss under `MOCK_LLM=1` is a hard
+  failure (`RuntimeError("Not available in mock mode")`), not a silent fallback to a real Groq
+  call — that's the whole point of the flag. `llm.explain()`'s mock path
+  (`_deterministic_explain`) mirrors `runner.py`'s existing `_fallback_explain` logic (join
+  flagged rules' messages, fixed next-action per outcome) rather than importing it, keeping the
+  two call sites (real-network-exception fallback vs. explicit mock mode) independent.
+- Per-stage mini progress bars (Checks tile) collapse `warn`+`fail` into a single "has an issue"
+  amber state instead of three colors — the pasted design brief only specifies two bar colors
+  ("blue gradient... amber if the stage has an issue"). The doughnut chart keeps the three-way
+  pass/warn/fail split since the brief asks for that distinction there specifically.
+- The pipeline stepper's "coin" color is amber whenever a *rule* in that stage is `warn`/`fail`,
+  but pink is reserved for a stage that itself raised an exception (`status: "failed"` from the
+  runner) — e.g. VEN-02 (blocked vendor, a rule-level `fail`) renders Match Vendor as an amber
+  "1 issue" coin, not pink, since the match_vendor *stage* still completed normally. This matches
+  the brief's own wording, which separates "stage with a warn/fail rule = amber" from "failed
+  stage = pink" as two different things.
+- The decision-card headline (`OUTCOME_HEADLINES` in `app.js`) is a fixed sentence per outcome,
+  not derived from `decision.summary` — the summary is LLM-authored (or mock-authored) prose of
+  variable shape/length and isn't reliably reducible to one clause.
+- The "Line items vs {PO}" title and any per-line "not billed" styling both key off data already
+  present in `ruleResults`/`lineMatches`; no new state was added to the SSE event payload or the
+  stored run record. `app/pipeline/match.py`'s `_build_line_matches` now also takes the full
+  `po_lines` list and appends one row per PO line with no matching invoice line, flagged
+  `not_billed: true`, so the UI can show a PO's outstanding-but-unbilled lines (previously only
+  invoice lines appeared in `line_matches`, so an unbilled PO line was invisible).

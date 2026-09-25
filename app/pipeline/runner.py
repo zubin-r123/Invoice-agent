@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import Generator
 
 from app import cache, db
-from app.llm import explain
+from app.llm import explain, mock_enabled
 from app.models import Decision, InvoiceData, RuleResult
 from app.pipeline import decide as decide_mod
 from app.pipeline import duplicates, match, validate
@@ -109,6 +109,7 @@ def run_pipeline(pdf_bytes: bytes, filename: str, run_id: str) -> Generator[dict
                 "invoice": invoice.model_dump(mode="json"),
                 "fields_missing": _fields_missing(invoice),
                 "cached": was_cached,
+                "mock": mock_enabled(),
             },
             round((time.perf_counter() - t0) * 1000),
         )
@@ -201,7 +202,10 @@ def run_pipeline(pdf_bytes: bytes, filename: str, run_id: str) -> Generator[dict
         decision = Decision(outcome=outcome, reasons=reasons, summary=summary, next_action=next_action)
         yield _event(
             "decide", "done",
-            {"outcome": outcome, "reasons": reasons, "summary": summary, "next_action": next_action},
+            {
+                "outcome": outcome, "reasons": reasons, "summary": summary,
+                "next_action": next_action, "mock": mock_enabled(),
+            },
             round((time.perf_counter() - t0) * 1000),
         )
 

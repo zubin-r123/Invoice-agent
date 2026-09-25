@@ -1,18 +1,67 @@
 [x-cloak] { display: none !important; }
 
 :root {
-  --brand-green: #1F6F4A;
-  --brand-green-dark: #175A3B;
-  --brand-green-50: #EAF3EE;
-  --bg-page: #F6F7F9;
+  --brand: #0057FF;
+  --navy: #0A1F5C;
+  --bg: #EEF3FF;
+  --ink: #3B4A70;
+  --muted: #5E6B8C;
+  --line: #D5DFFA;
+  --tint: #E3ECFF;
+  --mint: #B8F0DA;
+
+  --approve-bg: #DDF7EC;
+  --approve-text: #0B6B47;
+  --review-bg: #FFE3A8;
+  --review-text: #5A3500;
+  --reject-bg: #FDE3EE;
+  --reject-text: #A3174F;
+
+  --viz-approve: #10B981;
+  --viz-review: #E08600;
+  --viz-reject: #C21A5E;
 }
 
-.bg-page { background-color: var(--bg-page); }
-.bg-brand { background-color: var(--brand-green); }
-.bg-brand-hover:hover { background-color: var(--brand-green-dark); }
-.text-brand { color: var(--brand-green); }
-.border-brand { border-color: var(--brand-green); }
-.bg-brand-50 { background-color: var(--brand-green-50); }
+.bg-page { background-color: var(--bg); }
+.bg-brand { background-color: var(--brand); }
+.bg-brand-hover:hover { background-color: var(--navy); }
+.text-brand { color: var(--brand); }
+.border-brand { border-color: var(--brand); }
+.bg-brand-50 { background-color: var(--tint); }
+.text-navy { color: var(--navy); }
+.bg-navy { background-color: var(--navy); }
+
+h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.label-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- 3D tile cards ---------- */
+
+.tile {
+  background: linear-gradient(180deg, #FFFFFF, #F3F7FF);
+  border: 1px solid #FFFFFF;
+  border-radius: 20px;
+  box-shadow:
+    inset 0 1px 0 #FFFFFF,
+    inset 0 -2px 0 rgba(0, 87, 255, 0.05),
+    0 1px 2px rgba(10, 31, 92, 0.06),
+    0 18px 36px -14px rgba(0, 71, 214, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.tile:hover {
+  transform: translateY(-2px);
+}
 
 /* ---------- Pipeline stepper ---------- */
 
@@ -53,8 +102,8 @@
 .stepper-item:not(:last-child)::after {
   content: "";
   position: absolute;
-  background: #e2e8f0;
-  transition: background-color 0.3s ease;
+  background: var(--line);
+  transition: background 0.3s ease;
   left: 12px;
   top: 2.25rem;
   width: 2px;
@@ -72,7 +121,14 @@
 
 .stepper-item.is-done:not(:last-child)::after,
 .stepper-item.is-failed:not(:last-child)::after {
-  background: var(--brand-green);
+  background: linear-gradient(180deg, #4C8DFF, #0047D6);
+}
+
+@media (min-width: 768px) {
+  .stepper-item.is-done:not(:last-child)::after,
+  .stepper-item.is-failed:not(:last-child)::after {
+    background: linear-gradient(90deg, #4C8DFF, #0047D6);
+  }
 }
 
 .stepper-dot {
@@ -87,11 +143,50 @@
   justify-content: center;
 }
 
+/* Glossy 3D "coin" backgrounds for the stepper dot — stacked on .stepper-dot, which keeps the
+   sizing/positioning/flex-centering. */
+.coin-pending {
+  background: var(--line);
+}
+
+.coin-running,
+.coin-done {
+  background: linear-gradient(150deg, #4C8DFF, #0047D6);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -3px 3px rgba(0, 0, 0, 0.18),
+    0 4px 10px -2px rgba(0, 71, 214, 0.5);
+}
+
+.coin-warn {
+  background: linear-gradient(150deg, #FFC766, #E08600);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -3px 3px rgba(0, 0, 0, 0.18),
+    0 4px 10px -2px rgba(224, 134, 0, 0.5);
+}
+
+.coin-fail {
+  background: linear-gradient(150deg, #FF8FBB, #C21A5E);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -3px 3px rgba(0, 0, 0, 0.18),
+    0 4px 10px -2px rgba(194, 26, 94, 0.5);
+}
+
+.coin-decide {
+  background: linear-gradient(150deg, #24408C, #0A1F5C);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -3px 3px rgba(0, 0, 0, 0.18),
+    0 4px 10px -2px rgba(10, 31, 92, 0.5);
+}
+
 .stepper-ping {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  background: var(--brand-green-50);
+  background: rgba(0, 87, 255, 0.25);
 }
 
 .stepper-tick-in { animation: tick-in 0.25s ease-out; }
@@ -115,6 +210,98 @@
   .animate-pulse {
     animation: none !important;
   }
+}
+
+/* ---------- Decision hero card ---------- */
+
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #0A1F5C, #0A3AA8, #0057FF);
+  color: #FFFFFF;
+}
+
+.hero-card::before {
+  content: "";
+  position: absolute;
+  top: -45%;
+  right: -15%;
+  width: 65%;
+  height: 130%;
+  background: radial-gradient(circle, rgba(184, 240, 218, 0.35), transparent 70%);
+  pointer-events: none;
+}
+
+.hero-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.hero-panel {
+  position: relative;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  padding: 0.85rem 1.1rem;
+}
+
+.hero-panel-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* ---------- Outcome badges ---------- */
+
+.badge-approve { background: var(--approve-bg); color: var(--approve-text); }
+.badge-review { background: var(--review-bg); color: var(--review-text); }
+.badge-reject { background: var(--reject-bg); color: var(--reject-text); }
+.badge-neutral { background: var(--tint); color: var(--muted); }
+
+/* ---------- Progress bars ---------- */
+
+.bar-blue { background: linear-gradient(90deg, #4C8DFF, #0057FF); }
+.bar-amber { background: linear-gradient(90deg, #FFC766, #E08600); }
+
+/* ---------- Outcome dots/bars (dashboard doughnut legend) ---------- */
+
+.dot-approve, .bar-approve { background: var(--viz-approve); }
+.dot-review, .bar-review { background: var(--viz-review); }
+.dot-reject, .bar-reject { background: var(--viz-reject); }
+
+/* ---------- Dashboard KPI values ---------- */
+
+.kpi-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 1.75rem;
+  color: var(--navy);
+}
+
+.kpi-value-mint { color: var(--approve-text); }
+
+/* ---------- Line items ---------- */
+
+.row-issue { background: #FFF8EA; }
+.row-not-billed { background: #F3F5FA; color: var(--muted); }
+
+.pill-neutral { background: var(--line); color: var(--muted); }
+.pill-over { background: var(--review-bg); color: var(--review-text); }
+
+/* ---------- Buttons / disclosures ---------- */
+
+.btn-ghost-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand);
+  background: var(--tint);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
 }
 
 /* ---------- Progressive reveal ---------- */
